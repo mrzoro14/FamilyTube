@@ -10,8 +10,8 @@ android {
         applicationId = "com.familytube.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
 
         // yt-dlp, Python and ffmpeg ship as native libraries; keep only phone CPUs.
         ndk {
@@ -46,5 +46,7 @@ dependencies {
     implementation("io.github.junkfood02.youtubedl-android:library:$youtubedl")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedl")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("com.google.android.material:material:1.12.0")
 }

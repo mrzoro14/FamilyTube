@@ -11,6 +11,16 @@
     <string name="play">Play it now</string>
     <string name="open_downloads">Open my downloads</string>
     <string name="tip">Tip: in YouTube or Instagram, tap Share and choose FamilyTube for a quick popup. Downloads keep going in the background; watch the notification bar.</string>
+    <string name="status_button">WhatsApp Status saver</string>
+    <string name="status_title">WhatsApp Status</string>
+    <string name="status_help">Statuses you\'ve watched in WhatsApp show here. Tap one to view it, or Save to keep it after it disappears. Saved in Download > FamilyTube > WhatsApp Status.</string>
+    <string name="status_access_explain">First time only: FamilyTube needs permission to see WhatsApp\'s status folder.\n\nTap the button below. When the folder opens, tap \"Use this folder\" at the bottom, then \"Allow\".</string>
+    <string name="status_allow">Allow access to WhatsApp</string>
+    <string name="status_allow_business">I use WhatsApp Business</string>
+    <string name="status_empty">No statuses yet. Open WhatsApp, watch some statuses, then come back here.</string>
+    <string name="status_open">Open status</string>
+    <string name="status_save">Save</string>
+    <string name="status_saved">Saved ✓</string>
     <string name="getting_details">Getting video details…</string>
     <string name="sheet_video">Video (MP4)</string>
     <string name="sheet_audio">Music (MP3)</string>

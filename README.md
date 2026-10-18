@@ -19,6 +19,8 @@ The instructions for each are in the release notes. You only install it once: th
 
 Files are saved in **Download → FamilyTube**.
 
+**WhatsApp Status saver:** open FamilyTube and tap **WhatsApp Status saver**. The first time, tap **Allow access → Use this folder → Allow**. Statuses you've watched show in a grid: tap one to view it, or tap **Save** to keep it in **Download → FamilyTube → WhatsApp Status**.
+
 ## What it can't do
 
 - Private videos, Instagram Stories, and private Instagram accounts (they need a login).

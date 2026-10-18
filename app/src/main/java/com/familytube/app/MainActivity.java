@@ -73,6 +73,8 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
 
         findViewById(R.id.paste).setOnClickListener(v -> pasteLink());
         findViewById(R.id.open).setOnClickListener(v -> openDownloads());
+        findViewById(R.id.status_saver).setOnClickListener(v ->
+                startActivity(new Intent(this, StatusActivity.class)));
         download.setOnClickListener(v -> startDownload());
         play.setOnClickListener(v -> playLast());
 

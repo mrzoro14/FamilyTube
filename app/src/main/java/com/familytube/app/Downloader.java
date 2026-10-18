@@ -187,10 +187,24 @@ final class Downloader {
 
     /** Copy the file into the phone's public Download/FamilyTube folder. */
     private static Result saveToDownloads(Context context, File file) throws IOException {
-        String name = file.getName();
+        try (InputStream in = new FileInputStream(file)) {
+            return saveStream(context, in, file.getName(), FOLDER);
+        }
+    }
+
+    static String mimeFor(String name) {
         String ext = name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.US);
         String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
-        if (mime == null) mime = "application/octet-stream";
+        return mime != null ? mime : "application/octet-stream";
+    }
+
+    /**
+     * Save a stream as Download/&lt;subfolder&gt;/&lt;name&gt; so it shows in Files and Gallery.
+     * subfolder may contain "/" (e.g. "FamilyTube/WhatsApp Status").
+     */
+    static Result saveStream(Context context, InputStream in, String name, String subfolder)
+            throws IOException {
+        String mime = mimeFor(name);
 
         if (Build.VERSION.SDK_INT >= 29) {
             ContentResolver cr = context.getContentResolver();
@@ -198,12 +212,11 @@ final class Downloader {
             values.put(MediaStore.Downloads.DISPLAY_NAME, name);
             values.put(MediaStore.Downloads.MIME_TYPE, mime);
             values.put(MediaStore.Downloads.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOWNLOADS + "/" + FOLDER);
+                    Environment.DIRECTORY_DOWNLOADS + "/" + subfolder);
             values.put(MediaStore.Downloads.IS_PENDING, 1);
             Uri uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
             if (uri == null) throw new IOException("Couldn't save to Downloads.");
-            try (InputStream in = new FileInputStream(file);
-                 OutputStream out = cr.openOutputStream(uri)) {
+            try (OutputStream out = cr.openOutputStream(uri)) {
                 copy(in, out);
             }
             values.clear();
@@ -213,11 +226,10 @@ final class Downloader {
         }
 
         File dir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS), FOLDER);
+                Environment.DIRECTORY_DOWNLOADS), subfolder);
         dir.mkdirs();
         File dest = new File(dir, name);
-        try (InputStream in = new FileInputStream(file);
-             OutputStream out = new FileOutputStream(dest)) {
+        try (OutputStream out = new FileOutputStream(dest)) {
             copy(in, out);
         }
         MediaScannerConnection.scanFile(context, new String[]{dest.getAbsolutePath()},
