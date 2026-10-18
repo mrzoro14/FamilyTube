@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">FamilyTube</string>
+    <string name="step_link">1. Paste a YouTube or Instagram link</string>
+    <string name="link_hint">YouTube or Instagram link</string>
+    <string name="paste">Paste</string>
+    <string name="step_type">2. What do you want?</string>
+    <string name="type_video">Video (MP4)</string>
+    <string name="type_audio">Music / audio only (MP3)</string>
+    <string name="step_quality">3. Quality</string>
+    <string name="download">Download</string>
+    <string name="play">Play it now</string>
+    <string name="open_downloads">Open my downloads</string>
+    <string name="tip">Tip: in YouTube or Instagram, tap Share and choose FamilyTube for a quick popup. Downloads keep going in the background; watch the notification bar.</string>
+    <string name="getting_details">Getting video details…</string>
+    <string name="sheet_video">Video (MP4)</string>
+    <string name="sheet_audio">Music (MP3)</string>
+    <string name="sheet_hint">Tap one to start. It downloads in the background. Check the notification bar.</string>
+</resources>

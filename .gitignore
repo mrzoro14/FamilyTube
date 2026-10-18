@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+build.log
+*.apk
+windows/build/
+windows/dist/
+windows/.venv/
+*.spec

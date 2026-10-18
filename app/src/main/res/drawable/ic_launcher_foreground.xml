@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Red rounded square with a white down arrow over a bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#D32F2F"
+        android:pathData="M38,30h32a8,8 0,0 1,8 8v32a8,8 0,0 1,-8 8h-32a8,8 0,0 1,-8 -8v-32a8,8 0,0 1,8 -8z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,38h8v14h7l-11,12l-11,-12h7z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,67h24v4h-24z" />
+</vector>
