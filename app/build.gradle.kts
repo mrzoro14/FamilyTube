@@ -10,8 +10,8 @@ android {
         applicationId = "com.familytube.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
 
         // yt-dlp, Python and ffmpeg ship as native libraries; keep only phone CPUs.
         ndk {

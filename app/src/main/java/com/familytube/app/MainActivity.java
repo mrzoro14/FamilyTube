@@ -42,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     private TextView status;
     private Uri lastFile;
     private String lastMime;
+    private UpdateChecker.Update pendingUpdate; // waiting for the install-permission switch
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -115,6 +116,12 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     protected void onResume() {
         super.onResume();
         DownloadService.setListener(this);
+        // Back from the "Allow from this source" screen: carry on with the update.
+        if (pendingUpdate != null && UpdateInstaller.hasInstallPermission(this)) {
+            UpdateChecker.Update update = pendingUpdate;
+            pendingUpdate = null;
+            startUpdate(update);
+        }
     }
 
     @Override
@@ -133,12 +140,73 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
                 String notes = update.notes.isEmpty() ? "" : update.notes + "\n\n";
                 new AlertDialog.Builder(this)
                         .setTitle("New version " + update.version + " available")
-                        .setMessage(notes + "Tap Download, then open the downloaded file "
-                                + "and tap Update. Your settings are kept.")
-                        .setPositiveButton("Download", (d, w) -> openLink(update.downloadUrl))
+                        .setMessage(notes + "Tap Update now. Your settings are kept.")
+                        .setPositiveButton("Update now", (d, w) -> startUpdate(update))
                         .setNegativeButton("Later", null)
                         .show();
             });
+        }).start();
+    }
+
+    /** Download the new APK here and open Android's installer, no browser needed. */
+    private void startUpdate(UpdateChecker.Update update) {
+        if (!UpdateInstaller.canInstallInApp(update)) {
+            openLink(update.downloadUrl); // Release without an APK: fall back to the web page.
+            return;
+        }
+        if (!UpdateInstaller.hasInstallPermission(this)) {
+            pendingUpdate = update;
+            new AlertDialog.Builder(this)
+                    .setTitle("One-time permission")
+                    .setMessage("Android needs your OK before FamilyTube can update itself.\n\n"
+                            + "Tap Continue, switch on \"Allow from this source\", "
+                            + "then press Back to return here.")
+                    .setPositiveButton("Continue", (d, w) -> {
+                        try {
+                            startActivity(UpdateInstaller.installPermissionScreen(this));
+                        } catch (Exception e) {
+                            pendingUpdate = null;
+                            openLink(update.downloadUrl);
+                        }
+                    })
+                    .setNegativeButton("Later", (d, w) -> pendingUpdate = null)
+                    .show();
+            return;
+        }
+
+        View box = getLayoutInflater().inflate(R.layout.dialog_update, null);
+        LinearProgressIndicator bar = box.findViewById(R.id.update_progress);
+        TextView text = box.findViewById(R.id.update_text);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Updating FamilyTube")
+                .setView(box)
+                .setCancelable(false)
+                .show();
+        new Thread(() -> {
+            try {
+                java.io.File apk = UpdateInstaller.download(this, update.downloadUrl,
+                        (s, pct) -> main.post(() -> {
+                            text.setText(s);
+                            bar.setIndeterminate(false);
+                            bar.setProgressCompat(pct, true);
+                        }));
+                main.post(() -> {
+                    dialog.dismiss();
+                    startActivity(UpdateInstaller.installScreen(this, apk));
+                });
+            } catch (Exception e) {
+                main.post(() -> {
+                    dialog.dismiss();
+                    new AlertDialog.Builder(this)
+                            .setTitle("Update didn't download")
+                            .setMessage("Check the internet and try again, or get it from "
+                                    + "the website instead.")
+                            .setPositiveButton("Try again", (d, w) -> startUpdate(update))
+                            .setNegativeButton("Open website", (d, w) ->
+                                    openLink(UpdateChecker.RELEASES_PAGE))
+                            .show();
+                });
+            }
         }).start();
     }
 

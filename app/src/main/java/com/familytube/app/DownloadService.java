@@ -202,15 +202,12 @@ public class DownloadService extends Service {
     }
 
     private Notification updateNotification(UpdateChecker.Update update) {
-        Intent open = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(update.downloadUrl))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent tap = PendingIntent.getActivity(this, 1, open,
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        // Opening the app shows the "Update now" popup, which updates in-app.
         return new NotificationCompat.Builder(this, CHANNEL_DONE)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentTitle("FamilyTube " + update.version + " is available")
-                .setContentText("Tap to download the new version, then open it to update.")
-                .setContentIntent(tap)
+                .setContentText("Tap to update FamilyTube.")
+                .setContentIntent(openApp())
                 .setAutoCancel(true)
                 .build();
     }
