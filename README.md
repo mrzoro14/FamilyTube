@@ -23,8 +23,9 @@ Files are saved in **Download → FamilyTube**.
 
 ## What it can't do
 
-- Private videos, Instagram Stories, and private Instagram accounts (they need a login).
-- Instagram photo posts (only videos and Reels).
+- Private videos, Instagram Stories, and private Instagram accounts. These need a login, and FamilyTube never logs in to keep accounts safe.
+
+Public Instagram photo posts work. Share one and tap **Save post**, and it saves every photo and video in the post.
 
 Please only download videos you're allowed to keep.
 

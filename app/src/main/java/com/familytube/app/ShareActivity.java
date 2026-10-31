@@ -42,6 +42,12 @@ public class ShareActivity extends AppCompatActivity {
             finish();
             return;
         }
+        if (Downloader.isInstagramStory(link)) {
+            Toast.makeText(this, Downloader.friendlyError("FAMILYTUBE_STORY"),
+                    Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
         // Android 13+ asks before an app may show notifications (our progress bar).
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(
@@ -73,11 +79,19 @@ public class ShareActivity extends AppCompatActivity {
             return insets;
         });
 
-        for (int i = 0; i < Downloader.VIDEO_SHORT.length; i++) {
-            int level = i;
-            String text = Downloader.VIDEO_SHORT[i] + (i == 1 ? "  ★" : "");
-            video.addView(choice(text, v -> begin(link, false, level,
-                    "Video " + Downloader.VIDEO_SHORT[level], title)));
+        if (Downloader.isInstagram(link)) {
+            // Instagram posts can hold photos and videos, each in one size: save it all.
+            ((TextView) findViewById(R.id.video_heading)).setText(R.string.sheet_instagram);
+            int best = Downloader.VIDEO_SHORT.length - 1;
+            video.addView(choice(getString(R.string.sheet_save_post), v -> begin(link, false,
+                    best, "Instagram post", title)));
+        } else {
+            for (int i = 0; i < Downloader.VIDEO_SHORT.length; i++) {
+                int level = i;
+                String text = Downloader.VIDEO_SHORT[i] + (i == 1 ? "  ★" : "");
+                video.addView(choice(text, v -> begin(link, false, level,
+                        "Video " + Downloader.VIDEO_SHORT[level], title)));
+            }
         }
         for (int i = 0; i < Downloader.AUDIO_SHORT.length; i++) {
             int level = i;

@@ -15,12 +15,19 @@ import com.yausername.ffmpeg.FFmpeg;
 import com.yausername.youtubedl_android.YoutubeDL;
 import com.yausername.youtubedl_android.YoutubeDLRequest;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -110,23 +117,141 @@ final class Downloader {
     static String fetchTitle(Context context, String link) {
         try {
             init(context, (s, p) -> { });
-            return YoutubeDL.getInstance().getInfo(link).getTitle();
+            YoutubeDLRequest req = new YoutubeDLRequest(link);
+            req.addOption("--ignore-no-formats-error"); // Instagram photos have no video
+            req.addOption("--flat-playlist");           // one line for multi-item posts
+            req.addOption("--no-warnings");
+            return YoutubeDL.getInstance().getInfo(req).getTitle();
         } catch (Exception e) {
             return null;
         }
+    }
+
+    static boolean isInstagram(String link) {
+        return link != null && link.toLowerCase(Locale.US).matches("https?://([\\w-]+\\.)?(instagram\\.com|instagr\\.am)/.*");
+    }
+
+    static boolean isInstagramStory(String link) {
+        return isInstagram(link) && link.toLowerCase(Locale.US).contains("/stories/");
     }
 
     /** Download one link and save it to Download/FamilyTube. Runs on the caller's thread. */
     static Result download(Context context, String link, boolean audioOnly, int level,
                            Progress progress) throws Exception {
         init(context, progress);
+        if (isInstagramStory(link)) {
+            throw new IOException("FAMILYTUBE_STORY");
+        }
+        // Instagram posts can be photos, videos or a mix; save whatever is in them.
+        if (isInstagram(link) && !audioOnly) {
+            return downloadInstagramPost(context, link, level, progress);
+        }
+        return downloadWithYtDlp(context, link, audioOnly, level, progress, 0);
+    }
+
+    /**
+     * Let yt-dlp fetch the post details (it keeps up with Instagram's changes), then save
+     * photos directly from their full-size address and videos through yt-dlp.
+     */
+    private static Result downloadInstagramPost(Context context, String link, int level,
+                                                Progress progress) throws Exception {
+        progress.update("Looking at the post...", -1);
+        YoutubeDLRequest req = new YoutubeDLRequest(link);
+        req.addOption("-J");                          // all details as one JSON
+        req.addOption("--ignore-no-formats-error");   // a photo has no video formats
+        req.addOption("--no-warnings");
+        req.addOption("--cache-dir", new File(context.getCacheDir(), "yt-dlp").getAbsolutePath());
+        String out = YoutubeDL.getInstance().execute(req).getOut();
+        JSONObject info = new JSONObject(out.substring(out.indexOf('{')));
+
+        boolean isPost = "playlist".equals(info.optString("_type"));
+        JSONArray entries = isPost ? info.optJSONArray("entries") : null;
+        List<JSONObject> items = new ArrayList<>();
+        if (entries != null) {
+            for (int i = 0; i < entries.length(); i++) items.add(entries.optJSONObject(i));
+        } else {
+            items.add(info);
+        }
+
+        String owner = info.optString("channel", "instagram");
+        String postId = info.optString("id", "post");
+        Result first = null;
+        int saved = 0;
+        for (int i = 0; i < items.size(); i++) {
+            JSONObject item = items.get(i);
+            if (item == null) continue;
+            String step = items.size() > 1 ? " (" + (i + 1) + " of " + items.size() + ")" : "";
+            JSONArray formats = item.optJSONArray("formats");
+            Result r;
+            if (formats != null && formats.length() > 0) {
+                Progress p = (s, pct) -> progress.update(s + step, pct);
+                r = downloadWithYtDlp(context, link, false, level, p, isPost ? i + 1 : 0);
+            } else {
+                String url = bestImageUrl(item);
+                if (url == null) continue;
+                progress.update("Saving photo" + step + "...", (i * 100) / items.size());
+                String name = owner + "_" + postId + (items.size() > 1 ? "_" + (i + 1) : "");
+                r = saveImage(context, url, name);
+            }
+            if (first == null) first = r;
+            saved++;
+        }
+        if (first == null) throw new IOException("FAMILYTUBE_NOTHING");
+        if (saved == 1) return first;
+        return new Result(saved + " photos/videos from @" + owner, first.uri, first.mime);
+    }
+
+    /** yt-dlp lists a photo's sizes as thumbnails; pick the biggest. */
+    private static String bestImageUrl(JSONObject item) {
+        JSONArray thumbs = item.optJSONArray("thumbnails");
+        if (thumbs == null || thumbs.length() == 0) return null;
+        String best = null;
+        long bestArea = -1;
+        for (int i = 0; i < thumbs.length(); i++) {
+            JSONObject t = thumbs.optJSONObject(i);
+            if (t == null || t.optString("url").isEmpty()) continue;
+            long area = (long) t.optInt("width", 0) * t.optInt("height", 0);
+            // Unknown sizes: the list goes small to large, so later wins.
+            if (area >= bestArea) {
+                bestArea = area;
+                best = t.optString("url");
+            }
+        }
+        return best;
+    }
+
+    private static Result saveImage(Context context, String url, String baseName)
+            throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setRequestProperty("Referer", "https://www.instagram.com/");
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(30000);
+        if (conn.getResponseCode() != 200) {
+            throw new IOException("Instagram answered " + conn.getResponseCode());
+        }
+        String type = conn.getContentType() == null ? "" : conn.getContentType();
+        String ext = type.contains("webp") ? "webp" : type.contains("heic") ? "heic" : "jpg";
+        String name = baseName.replaceAll("[\\\\/:*?\"<>|]", "_") + "." + ext;
+        try (InputStream in = conn.getInputStream()) {
+            return saveStream(context, in, name, FOLDER);
+        }
+    }
+
+    /** One yt-dlp download. item > 0 picks that item from a multi-item post. */
+    private static Result downloadWithYtDlp(Context context, String link, boolean audioOnly,
+                                            int level, Progress progress, int item)
+            throws Exception {
         Context app = context.getApplicationContext();
         File work = new File(app.getCacheDir(), "download");
         deleteContents(work);
         work.mkdirs();
         try {
             YoutubeDLRequest req = new YoutubeDLRequest(link);
-            req.addOption("--no-playlist");
+            if (item > 0) {
+                req.addOption("-I", String.valueOf(item));
+            } else {
+                req.addOption("--no-playlist");
+            }
             req.addOption("--no-mtime");
             req.addOption("--windows-filenames");
             req.addOption("--cache-dir", new File(app.getCacheDir(), "yt-dlp").getAbsolutePath());
@@ -255,6 +380,14 @@ final class Downloader {
 
     static String friendlyError(String message) {
         String m = message == null ? "" : message.toLowerCase(Locale.US);
+        if (m.contains("familytube_story")) {
+            return "Instagram Stories can't be saved. Instagram only shows them to people "
+                    + "who are logged in, and FamilyTube doesn't log in to keep your account "
+                    + "safe. Posts, photos and Reels work.";
+        }
+        if (m.contains("familytube_nothing")) {
+            return "Couldn't find any photo or video in this Instagram post.";
+        }
         if (m.contains("[instagram]") && (m.contains("login") || m.contains("rate-limit")
                 || m.contains("rate limit") || m.contains("empty media")
                 || m.contains("cookies") || m.contains("not available"))) {
@@ -263,8 +396,9 @@ final class Downloader {
                     + "Public Reels usually work. If it was public, wait a few minutes "
                     + "and try again.";
         }
-        if (m.contains("[instagram]") && m.contains("no video formats")) {
-            return "This Instagram post is a photo. FamilyTube can only save videos and Reels.";
+        if (m.contains("[instagram]") && (m.contains("no video") || m.contains("no video formats"))) {
+            return "This Instagram post is a photo, so it can't be saved as music. "
+                    + "Choose Video / Save post instead.";
         }
         if (m.contains("private video") || m.contains("sign in")) {
             return "This video is private or needs a sign-in, so it can't be downloaded.";

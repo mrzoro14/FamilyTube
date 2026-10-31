@@ -11,6 +11,9 @@
     <string name="play">Play it now</string>
     <string name="open_downloads">Open my downloads</string>
     <string name="tip">Tip: in YouTube or Instagram, tap Share and choose FamilyTube for a quick popup. Downloads keep going in the background; watch the notification bar.</string>
+    <!-- Shown once after updating. Rewrite for every release. -->
+    <string name="whats_new_title">What\'s new in FamilyTube %1$s</string>
+    <string name="whats_new">• Instagram photos: share a photo post to FamilyTube and tap Save post. Posts with several photos and videos save everything.\n\n• Instagram Stories show a clear message. They need a login, which FamilyTube doesn\'t use, to keep your account safe.\n\n• This \"What\'s new\" message, after every update.</string>
     <string name="status_button">WhatsApp Status saver</string>
     <string name="status_title">WhatsApp Status</string>
     <string name="status_help">Statuses you\'ve watched in WhatsApp show here. Tap one to view it, or Save to keep it after it disappears. Saved in Download > FamilyTube > WhatsApp Status.</string>
@@ -24,5 +27,7 @@
     <string name="getting_details">Getting video details…</string>
     <string name="sheet_video">Video (MP4)</string>
     <string name="sheet_audio">Music (MP3)</string>
+    <string name="sheet_instagram">Photos &amp; videos</string>
+    <string name="sheet_save_post">Save post</string>
     <string name="sheet_hint">Tap one to start. It downloads in the background. Check the notification bar.</string>
 </resources>

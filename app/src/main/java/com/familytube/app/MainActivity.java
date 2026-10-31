@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
         }
 
-        checkForUpdate();
+        if (!showWhatsNewIfUpdated()) checkForUpdate();
 
         if (Downloader.isReady()) {
             setStatus("Ready. Paste a link and tap Download.", 0);
@@ -128,6 +128,32 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     protected void onPause() {
         DownloadService.setListener(null);
         super.onPause();
+    }
+
+    /** Once per version, right after an update, list what changed. Returns true if shown. */
+    private boolean showWhatsNewIfUpdated() {
+        String current = UpdateChecker.currentVersion(this);
+        String seen = prefs.getString("whatsNewSeen", null);
+        prefs.edit().putString("whatsNewSeen", current).apply();
+        if (current.equals(seen)) return false;
+        if (seen == null && !wasUpdated()) return false; // Fresh install: nothing "new" yet.
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.whats_new_title, current))
+                .setMessage(R.string.whats_new)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+        return true;
+    }
+
+    /** True if this install is an update rather than a first install. */
+    private boolean wasUpdated() {
+        try {
+            android.content.pm.PackageInfo info =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            return info.lastUpdateTime > info.firstInstallTime;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
     }
 
     /** Ask GitHub for a newer FamilyTube and offer to download it. */
