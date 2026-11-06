@@ -176,7 +176,7 @@ final class Downloader {
 
     /** Download one link and save it to Download/FamilyTube. Runs on the caller's thread. */
     static Result download(Context context, String link, boolean audioOnly, int level, Clip clip,
-                           Progress progress) throws Exception {
+                           String processId, Progress progress) throws Exception {
         init(context, progress);
         if (isInstagramStory(link)) {
             throw new IOException("FAMILYTUBE_STORY");
@@ -186,9 +186,9 @@ final class Downloader {
         }
         // Instagram posts can be photos, videos or a mix; save whatever is in them.
         if (isInstagram(link) && !audioOnly) {
-            return downloadInstagramPost(context, link, level, progress);
+            return downloadInstagramPost(context, link, level, processId, progress);
         }
-        return downloadWithYtDlp(context, link, audioOnly, level, progress, 0, clip);
+        return downloadWithYtDlp(context, link, audioOnly, level, processId, progress, 0, clip);
     }
 
     /**
@@ -196,14 +196,15 @@ final class Downloader {
      * photos directly from their full-size address and videos through yt-dlp.
      */
     private static Result downloadInstagramPost(Context context, String link, int level,
-                                                Progress progress) throws Exception {
+                                                String processId, Progress progress)
+            throws Exception {
         progress.update("Looking at the post...", -1);
         YoutubeDLRequest req = new YoutubeDLRequest(link);
         req.addOption("-J");                          // all details as one JSON
         req.addOption("--ignore-no-formats-error");   // a photo has no video formats
         req.addOption("--no-warnings");
         req.addOption("--cache-dir", new File(context.getCacheDir(), "yt-dlp").getAbsolutePath());
-        String out = YoutubeDL.getInstance().execute(req).getOut();
+        String out = YoutubeDL.getInstance().execute(req, processId, null).getOut();
         JSONObject info = new JSONObject(out.substring(out.indexOf('{')));
 
         boolean isPost = "playlist".equals(info.optString("_type"));
@@ -227,7 +228,8 @@ final class Downloader {
             Result r;
             if (formats != null && formats.length() > 0) {
                 Progress p = (s, pct) -> progress.update(s + step, pct);
-                r = downloadWithYtDlp(context, link, false, level, p, isPost ? i + 1 : 0, null);
+                r = downloadWithYtDlp(context, link, false, level, processId, p,
+                        isPost ? i + 1 : 0, null);
             } else {
                 String url = bestImageUrl(item);
                 if (url == null) continue;
@@ -284,8 +286,8 @@ final class Downloader {
      * clip, if set, saves only that part of the video.
      */
     private static Result downloadWithYtDlp(Context context, String link, boolean audioOnly,
-                                            int level, Progress progress, int item, Clip clip)
-            throws Exception {
+                                            int level, String processId, Progress progress,
+                                            int item, Clip clip) throws Exception {
         Context app = context.getApplicationContext();
         File work = new File(app.getCacheDir(), "download");
         deleteContents(work);
@@ -332,7 +334,7 @@ final class Downloader {
             } else {
                 progress.update("Starting download...", 0);
             }
-            YoutubeDL.getInstance().execute(req, null, (pct, eta, line) -> {
+            YoutubeDL.getInstance().execute(req, processId, (pct, eta, line) -> {
                 if (line != null && (line.startsWith("[Merger]")
                         || line.startsWith("[ExtractAudio]")
                         || line.startsWith("[EmbedThumbnail]"))) {

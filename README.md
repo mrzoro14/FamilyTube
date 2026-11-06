@@ -19,6 +19,8 @@ The instructions for each are in the release notes. You only install it once: th
 
 Files are saved in **Download → FamilyTube**.
 
+**Dashboard:** Home has a New download card, shortcuts and your recent downloads. The **Downloads** tab shows everything with live progress, including downloads started from the Share button, with **Play**, **Share**, **Cancel** and **Retry**. A message inside the app tells you when a download ends.
+
 **Clips:** to save only part of a YouTube video, switch on **✂ Only download a part (clip)**, drag the slider or type the **From** and **To** times (like `1:05`), then pick a quality. It works for video and music. Clips copy the video without re-encoding so they're fast, which means a clip can start a second or so early in some players.
 
 **WhatsApp Status saver:** open FamilyTube and tap **WhatsApp Status saver**. The first time, tap **Allow access → Use this folder → Allow**. Statuses you've watched show in a grid: tap one to view it, or tap **Save** to keep it in **Download → FamilyTube → WhatsApp Status**.

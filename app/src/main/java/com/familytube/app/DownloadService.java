@@ -18,6 +18,8 @@ import android.os.SystemClock;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 
+import com.yausername.youtubedl_android.YoutubeDL;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,27 +30,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DownloadService extends Service {
 
-    private static final String EXTRA_LINK = "link";
-    private static final String EXTRA_AUDIO = "audio";
-    private static final String EXTRA_LEVEL = "level";
-    private static final String EXTRA_LABEL = "label";
-    private static final String EXTRA_CLIP_START = "clipStart";
-    private static final String EXTRA_CLIP_END = "clipEnd";
+    private static final String EXTRA_ID = "id";
 
     private static final String CHANNEL_PROGRESS = "progress";
     private static final String CHANNEL_DONE = "done";
     private static final int ONGOING_ID = 1;
     private static final AtomicInteger NEXT_ID = new AtomicInteger(100);
-
-    /** Lets the main screen mirror progress while it's visible. */
-    interface Listener {
-        void onStatus(String status, int pct);
-
-        void onFinished(Downloader.Result result, String error);
-    }
-
-    private static volatile Listener listener;
-    private static volatile boolean running = false;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -56,29 +43,34 @@ public class DownloadService extends Service {
     private NotificationManager notifications;
     private long lastNotify;
 
-    static void start(Context context, String link, boolean audio, int level, String label,
-                      Downloader.Clip clip) {
-        Intent i = new Intent(context, DownloadService.class)
-                .putExtra(EXTRA_LINK, link)
-                .putExtra(EXTRA_AUDIO, audio)
-                .putExtra(EXTRA_LEVEL, level)
-                .putExtra(EXTRA_LABEL, label);
-        if (clip != null) {
-            i.putExtra(EXTRA_CLIP_START, clip.start).putExtra(EXTRA_CLIP_END, clip.end);
+    static DownloadStore.Item start(Context context, String link, boolean audio, int level,
+                                    String label, Downloader.Clip clip) {
+        DownloadStore.Item item = DownloadStore.get(context).add(label, link, audio, level, clip);
+        launch(context, item);
+        return item;
+    }
+
+    /** Try a failed download again. */
+    static void retry(Context context, DownloadStore.Item item) {
+        DownloadStore.get(context).requeue(item);
+        launch(context, item);
+    }
+
+    /** Stop a download: waiting ones are skipped, the running one has its process ended. */
+    static void cancel(DownloadStore.Item item) {
+        item.cancelled = true;
+        if (item.state == DownloadStore.RUNNING) {
+            YoutubeDL.getInstance().destroyProcessById(item.id);
         }
+    }
+
+    private static void launch(Context context, DownloadStore.Item item) {
+        Intent i = new Intent(context, DownloadService.class).putExtra(EXTRA_ID, item.id);
         if (Build.VERSION.SDK_INT >= 26) {
             context.startForegroundService(i);
         } else {
             context.startService(i);
         }
-    }
-
-    static void setListener(Listener l) {
-        listener = l;
-    }
-
-    static boolean isRunning() {
-        return running;
     }
 
     @Override
@@ -99,55 +91,26 @@ public class DownloadService extends Service {
         ServiceCompat.startForeground(this, ONGOING_ID,
                 progressNotification("Waiting to start...", "", -1), type);
 
-        if (intent == null || intent.getStringExtra(EXTRA_LINK) == null) {
+        DownloadStore store = DownloadStore.get(this);
+        DownloadStore.Item item = intent == null ? null : store.find(intent.getStringExtra(EXTRA_ID));
+        if (item == null) {
             if (queued.get() == 0) stopSelf();
             return START_NOT_STICKY;
         }
-        String link = intent.getStringExtra(EXTRA_LINK);
-        boolean audio = intent.getBooleanExtra(EXTRA_AUDIO, false);
-        int level = intent.getIntExtra(EXTRA_LEVEL, 1);
-        String label = intent.getStringExtra(EXTRA_LABEL);
-        Downloader.Clip clip = intent.hasExtra(EXTRA_CLIP_START)
-                ? new Downloader.Clip(intent.getIntExtra(EXTRA_CLIP_START, 0),
-                        intent.getIntExtra(EXTRA_CLIP_END, 0))
-                : null;
 
         queued.incrementAndGet();
-        running = true;
-        worker.execute(() -> runOne(link, audio, level, label, clip));
+        worker.execute(() -> runOne(store, item));
         return START_NOT_STICKY;
     }
 
-    private void runOne(String link, boolean audio, int level, String label,
-                        Downloader.Clip clip) {
-        String title = label == null ? "FamilyTube" : label;
-        Downloader.Progress progress = (status, pct) -> {
-            Listener l = listener;
-            if (l != null) main.post(() -> l.onStatus(status, pct));
-            // Notifications are rate-limited by Android; update at most twice a second.
-            long now = SystemClock.elapsedRealtime();
-            if (pct >= 100 || now - lastNotify > 500) {
-                lastNotify = now;
-                notifications.notify(ONGOING_ID, progressNotification(title, status, pct));
-            }
-        };
-        Downloader.Result result = null;
-        String error = null;
-        try {
-            result = Downloader.download(this, link, audio, level, clip, progress);
-            notifications.notify(NEXT_ID.getAndIncrement(), doneNotification(result));
-        } catch (Exception e) {
-            error = Downloader.friendlyError(e.getMessage());
-            notifications.notify(NEXT_ID.getAndIncrement(), failedNotification(error));
+    private void runOne(DownloadStore store, DownloadStore.Item item) {
+        if (item.cancelled) {
+            store.remove(item);
+        } else {
+            download(store, item);
         }
 
-        Listener l = listener;
-        Downloader.Result r = result;
-        String err = error;
-        if (l != null) main.post(() -> l.onFinished(r, err));
-
         if (queued.decrementAndGet() == 0) {
-            running = false;
             // Family mostly uses the Share popup, so mention new versions here too
             // (UpdateChecker limits this to once a day).
             UpdateChecker.Update update = UpdateChecker.check(this, false);
@@ -160,6 +123,33 @@ public class DownloadService extends Service {
                     stopSelf();
                 }
             });
+        }
+    }
+
+    private void download(DownloadStore store, DownloadStore.Item item) {
+        store.markRunning(item);
+        Downloader.Progress progress = (status, pct) -> {
+            store.progress(item, status, pct);
+            // Notifications are rate-limited by Android; update at most twice a second.
+            long now = SystemClock.elapsedRealtime();
+            if (pct >= 100 || now - lastNotify > 500) {
+                lastNotify = now;
+                notifications.notify(ONGOING_ID, progressNotification(item.label, status, pct));
+            }
+        };
+        try {
+            Downloader.Result result = Downloader.download(this, item.link, item.audio, item.level,
+                    item.clip(), item.id, progress);
+            store.markDone(item, result);
+            notifications.notify(NEXT_ID.getAndIncrement(), doneNotification(result));
+        } catch (Exception e) {
+            if (item.cancelled) {
+                store.remove(item);
+                return;
+            }
+            String error = Downloader.friendlyError(e.getMessage());
+            store.markFailed(item, error);
+            notifications.notify(NEXT_ID.getAndIncrement(), failedNotification(error));
         }
     }
 
@@ -224,7 +214,9 @@ public class DownloadService extends Service {
     }
 
     private PendingIntent openApp() {
-        Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent i = new Intent(this, MainActivity.class)
+                .putExtra(MainActivity.EXTRA_SHOW_DOWNLOADS, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         return PendingIntent.getActivity(this, 0, i,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }

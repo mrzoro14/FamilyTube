@@ -17,34 +17,58 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.badge.BadgeDrawable;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.snackbar.Snackbar;
 import com.yausername.youtubedl_android.mapper.VideoInfo;
 
-public class MainActivity extends AppCompatActivity implements DownloadService.Listener {
+import java.util.List;
+
+public class MainActivity extends AppCompatActivity
+        implements DownloadStore.Listener, DownloadsAdapter.Actions {
+
+    static final String EXTRA_SHOW_DOWNLOADS = "showDownloads";
 
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private EditText url;
-    private RadioGroup type;
-    private RadioGroup quality;
-    private RadioButton[] qualityButtons;
+    private MaterialButtonToggleGroup type;
+    private ChipGroup quality;
+    private TextView qualityHint;
     private SharedPreferences prefs;
     private MaterialButton download;
-    private MaterialButton play;
-    private LinearProgressIndicator progress;
-    private TextView status;
-    private Uri lastFile;
-    private String lastMime;
+    private View root;
+    private BottomNavigationView nav;
+    private View homePage;
+    private View downloadsPage;
+    private View activeCard;
+    private TextView activeTitle;
+    private TextView activeStatus;
+    private LinearProgressIndicator activeProgress;
+    private View recentSection;
+    private View downloadsEmpty;
+    private View clearFinished;
+    private DownloadStore store;
+    private DownloadsAdapter recentAdapter;
+    private DownloadsAdapter downloadsAdapter;
+    private OnBackPressedCallback backToHome;
+    private String setupMessage; // shown on the Home card until the downloader is ready
+    private boolean showingChoices = false;
     private UpdateChecker.Update pendingUpdate; // waiting for the install-permission switch
     private ClipPanel clipPanel;
     private String clipLink; // the link clipPanel's length belongs to
@@ -56,38 +80,76 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
 
         // Android 15+ draws apps edge to edge; keep content clear of the
         // status bar, camera cutout, navigation bar and keyboard.
-        View root = findViewById(R.id.root);
+        root = findViewById(R.id.root);
+        nav = findViewById(R.id.nav);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
                     | WindowInsetsCompat.Type.displayCutout()
                     | WindowInsetsCompat.Type.ime());
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            // The bottom bar would otherwise ride up on top of the keyboard.
+            nav.setVisibility(insets.isVisible(WindowInsetsCompat.Type.ime())
+                    ? View.GONE : View.VISIBLE);
             return WindowInsetsCompat.CONSUMED;
         });
 
         url = findViewById(R.id.url);
         type = findViewById(R.id.type);
         quality = findViewById(R.id.quality);
-        qualityButtons = new RadioButton[]{
-                findViewById(R.id.q1), findViewById(R.id.q2),
-                findViewById(R.id.q3), findViewById(R.id.q4)};
+        qualityHint = findViewById(R.id.quality_hint);
         prefs = getSharedPreferences("app", MODE_PRIVATE);
         download = findViewById(R.id.download);
-        play = findViewById(R.id.play);
-        progress = findViewById(R.id.progress);
-        status = findViewById(R.id.status);
+        homePage = findViewById(R.id.home_page);
+        downloadsPage = findViewById(R.id.downloads_page);
+        activeCard = findViewById(R.id.active_card);
+        activeTitle = findViewById(R.id.active_title);
+        activeStatus = findViewById(R.id.active_status);
+        activeProgress = findViewById(R.id.active_progress);
+        recentSection = findViewById(R.id.recent_section);
+        downloadsEmpty = findViewById(R.id.downloads_empty);
+        clearFinished = findViewById(R.id.clear_finished);
+        store = DownloadStore.get(this);
 
         findViewById(R.id.paste).setOnClickListener(v -> pasteLink());
         findViewById(R.id.open).setOnClickListener(v -> openDownloads());
         findViewById(R.id.status_saver).setOnClickListener(v ->
                 startActivity(new Intent(this, StatusActivity.class)));
         download.setOnClickListener(v -> startDownload());
-        play.setOnClickListener(v -> playLast());
+        clearFinished.setOnClickListener(v -> store.clearFinished());
+        findViewById(R.id.see_all).setOnClickListener(v -> showDownloadsTab());
+        activeCard.setOnClickListener(v -> {
+            if (setupMessage == null) showDownloadsTab();
+        });
 
-        type.setOnCheckedChangeListener((g, id) -> showQualityChoices());
-        quality.setOnCheckedChangeListener((g, id) -> {
+        recentAdapter = new DownloadsAdapter(this, 3);
+        downloadsAdapter = new DownloadsAdapter(this, 0);
+        setUpList(findViewById(R.id.recent_list), recentAdapter);
+        setUpList(findViewById(R.id.downloads_list), downloadsAdapter);
+
+        // Back from Downloads returns to Home instead of leaving the app.
+        backToHome = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                nav.setSelectedItemId(R.id.nav_home);
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, backToHome);
+        nav.setOnItemSelectedListener(item -> {
+            boolean downloads = item.getItemId() == R.id.nav_downloads;
+            homePage.setVisibility(downloads ? View.GONE : View.VISIBLE);
+            downloadsPage.setVisibility(downloads ? View.VISIBLE : View.GONE);
+            backToHome.setEnabled(downloads);
+            return true;
+        });
+
+        type.addOnButtonCheckedListener((g, id, checked) -> {
+            if (checked) showQualityChoices();
+        });
+        quality.setOnCheckedStateChangeListener((g, ids) -> {
             int index = qualityIndex();
-            if (index >= 0) prefs.edit().putInt(qualityKey(), index).apply();
+            if (showingChoices || index < 0) return;
+            prefs.edit().putInt(qualityKey(), index).apply();
+            showQualityHint(index);
         });
         showQualityChoices();
 
@@ -116,28 +178,53 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
         if (!showWhatsNewIfUpdated()) checkForUpdate();
 
         if (Downloader.isReady()) {
-            setStatus("Ready. Paste a link and tap Download.", 0);
             download.setEnabled(true);
         } else {
             // First launch unpacks the downloader; later launches are quick.
-            setStatus("Getting ready... (the first time takes a minute)", -1);
+            setSetupMessage("Getting ready... (the first time takes a minute)");
             new Thread(() -> {
                 try {
-                    Downloader.init(this, this::setStatus);
-                    setStatus("Ready. Paste a link and tap Download.", 0);
+                    Downloader.init(this, (s, p) -> setSetupMessage(s));
+                    setSetupMessage(null);
                     main.post(() -> download.setEnabled(true));
                 } catch (Exception e) {
-                    setStatus("Setup failed. Close the app and open it again.", 0);
+                    setSetupMessage("Setup failed. Close the app and open it again.");
                     showError("Couldn't get ready:\n\n" + e.getMessage());
                 }
             }).start();
         }
+        handleOpenIntent(getIntent());
+    }
+
+    private void setUpList(RecyclerView list, DownloadsAdapter adapter) {
+        list.setLayoutManager(new LinearLayoutManager(this));
+        list.setItemAnimator(null); // Rows refresh often; animating them flickers.
+        list.setAdapter(adapter);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleOpenIntent(intent);
+    }
+
+    /** Tapping a FamilyTube notification lands on the Downloads tab. */
+    private void handleOpenIntent(Intent intent) {
+        if (intent != null && intent.getBooleanExtra(EXTRA_SHOW_DOWNLOADS, false)) {
+            showDownloadsTab();
+        }
+    }
+
+    private void showDownloadsTab() {
+        nav.setSelectedItemId(R.id.nav_downloads);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        DownloadService.setListener(this);
+        store.addListener(this);
+        refreshDashboard();
         // Back from the "Allow from this source" screen: carry on with the update.
         if (pendingUpdate != null && UpdateInstaller.hasInstallPermission(this)) {
             UpdateChecker.Update update = pendingUpdate;
@@ -148,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
 
     @Override
     protected void onPause() {
-        DownloadService.setListener(null);
+        store.removeListener(this);
         super.onPause();
     }
 
@@ -266,24 +353,114 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
         }
     }
 
-    // ------------------------------------------------------------ service updates
+    // ------------------------------------------------------------ dashboard
 
     @Override
-    public void onStatus(String text, int pct) {
-        setStatus(text, pct);
+    public void onDownloadsChanged() {
+        refreshDashboard();
+    }
+
+    /** The message inside the app when a download ends, wherever the user is in it. */
+    @Override
+    public void onDownloadFinished(DownloadStore.Item item) {
+        boolean done = item.state == DownloadStore.DONE;
+        String name = item.fileName != null ? item.fileName : item.label;
+        Snackbar bar = Snackbar.make(root,
+                done ? "Done: " + name : "Download failed: " + name, Snackbar.LENGTH_LONG)
+                .setAnchorView(nav.getVisibility() == View.VISIBLE ? nav : null);
+        if (done) {
+            bar.setAction("Play", v -> open(item));
+        } else {
+            bar.setAction("Why?", v -> showError(item.error));
+        }
+        bar.show();
+    }
+
+    private void refreshDashboard() {
+        List<DownloadStore.Item> all = store.all();
+        recentAdapter.submit(all);
+        downloadsAdapter.submit(all);
+        recentSection.setVisibility(recentAdapter.getItemCount() > 0 ? View.VISIBLE : View.GONE);
+        downloadsEmpty.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
+        clearFinished.setVisibility(all.size() > store.activeCount() ? View.VISIBLE : View.GONE);
+
+        int active = store.activeCount();
+        BadgeDrawable badge = nav.getOrCreateBadge(R.id.nav_downloads);
+        badge.setVisible(active > 0);
+        badge.setNumber(active);
+        showActiveCard(active);
+    }
+
+    private void showActiveCard(int active) {
+        DownloadStore.Item current = store.currentActive();
+        if (setupMessage != null) {
+            activeCard.setVisibility(View.VISIBLE);
+            activeTitle.setText(R.string.app_name);
+            activeStatus.setText(setupMessage);
+            DownloadsAdapter.showProgress(activeProgress, -1);
+        } else if (current != null) {
+            activeCard.setVisibility(View.VISIBLE);
+            activeTitle.setText(current.label);
+            int waiting = active - 1;
+            activeStatus.setText(current.status + (waiting > 0 ? " (" + waiting + " more waiting)" : ""));
+            DownloadsAdapter.showProgress(activeProgress, current.pct);
+        } else {
+            activeCard.setVisibility(View.GONE);
+        }
+    }
+
+    private void setSetupMessage(String message) {
+        main.post(() -> {
+            setupMessage = message;
+            refreshDashboard();
+        });
+    }
+
+    // ------------------------------------------------------------ download rows
+
+    @Override
+    public void open(DownloadStore.Item item) {
+        if (item.state == DownloadStore.FAILED) {
+            showError(item.error);
+        } else if (item.state == DownloadStore.DONE) {
+            if (item.fileUri() == null) {
+                openDownloads();
+                return;
+            }
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(item.fileUri(), item.mime)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+            } catch (Exception e) {
+                openDownloads();
+            }
+        }
     }
 
     @Override
-    public void onFinished(Downloader.Result result, String error) {
-        if (error != null) {
-            setStatus("Download failed.", 0);
-            showError(error);
-            return;
-        }
-        setStatus("Done! Saved in Download > " + Downloader.FOLDER + ":\n" + result.name, 100);
-        lastFile = result.uri;
-        lastMime = result.mime;
-        play.setVisibility(lastFile != null ? View.VISIBLE : View.GONE);
+    public void share(DownloadStore.Item item) {
+        Intent send = new Intent(Intent.ACTION_SEND)
+                .setType(item.mime)
+                .putExtra(Intent.EXTRA_STREAM, item.fileUri())
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivity(Intent.createChooser(send, "Share"));
+    }
+
+    @Override
+    public void retry(DownloadStore.Item item) {
+        DownloadService.retry(this, item);
+    }
+
+    @Override
+    public void cancel(DownloadStore.Item item) {
+        boolean waiting = item.state == DownloadStore.QUEUED;
+        DownloadService.cancel(item);
+        if (waiting) store.remove(item);
+    }
+
+    @Override
+    public void remove(DownloadStore.Item item) {
+        store.remove(item); // Only the list entry; the saved file stays on the phone.
     }
 
     // ------------------------------------------------------------ download
@@ -315,12 +492,17 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
                 : "Video " + Downloader.VIDEO_SHORT[level];
         Downloader.Clip clip = clipPanel.clip();
         if (clip != null) what += " clip " + clip.label();
-        DownloadService.start(this, link, audioOnly, level, what, clip);
+        DownloadStore.Item item = DownloadService.start(this, link, audioOnly, level, what, clip);
         url.setText("");
-        play.setVisibility(View.GONE);
-        setStatus(DownloadService.isRunning()
-                ? "Added. It will start after the current download."
-                : "Starting download... You can leave the app; see the notification bar.", -1);
+
+        // Pasted links arrive without a title; look it up so the list reads properly.
+        String kind = what;
+        new Thread(() -> {
+            VideoInfo info = Downloader.fetchInfo(this, link);
+            if (info != null && info.getTitle() != null && item.isActive()) {
+                store.rename(item, kind + ": " + info.getTitle());
+            }
+        }).start();
     }
 
     /** Get the pasted video's length for the clip slider, once typing has settled. */
@@ -349,7 +531,7 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     };
 
     private boolean isAudio() {
-        return type.getCheckedRadioButtonId() == R.id.audio;
+        return type.getCheckedButtonId() == R.id.type_audio;
     }
 
     private String qualityKey() {
@@ -357,23 +539,30 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     }
 
     private int qualityIndex() {
-        for (int i = 0; i < qualityButtons.length; i++) {
-            if (qualityButtons[i].isChecked()) return i;
-        }
-        return -1;
+        return quality.indexOfChild(quality.findViewById(quality.getCheckedChipId()));
     }
 
-    /** Swap the quality list between video and music, restoring the last pick. */
+    /** Swap the quality chips between video and music, restoring the last pick. */
     private void showQualityChoices() {
-        String[] labels = isAudio() ? Downloader.AUDIO_LABELS : Downloader.VIDEO_LABELS;
+        String[] names = isAudio() ? Downloader.AUDIO_SHORT : Downloader.VIDEO_SHORT;
         int saved = prefs.getInt(qualityKey(), 1); // 720p video / high-quality music
-        if (saved >= labels.length) saved = labels.length - 1;
-        for (int i = 0; i < qualityButtons.length; i++) {
-            boolean used = i < labels.length;
-            qualityButtons[i].setVisibility(used ? View.VISIBLE : View.GONE);
-            if (used) qualityButtons[i].setText(labels[i]);
+        if (saved >= names.length) saved = names.length - 1;
+        showingChoices = true;
+        quality.removeAllViews();
+        for (int i = 0; i < names.length; i++) {
+            Chip chip = new Chip(this);
+            chip.setId(View.generateViewId());
+            chip.setText(names[i]);
+            chip.setCheckable(true);
+            quality.addView(chip);
         }
-        quality.check(qualityButtons[saved].getId());
+        quality.check(quality.getChildAt(saved).getId());
+        showingChoices = false;
+        showQualityHint(saved);
+    }
+
+    private void showQualityHint(int index) {
+        qualityHint.setText((isAudio() ? Downloader.AUDIO_LABELS : Downloader.VIDEO_LABELS)[index]);
     }
 
     // ------------------------------------------------------------ buttons
@@ -396,17 +585,6 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
         }
     }
 
-    private void playLast() {
-        if (lastFile == null) return;
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(lastFile, lastMime)
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
-        } catch (Exception e) {
-            openDownloads();
-        }
-    }
-
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
@@ -419,19 +597,6 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     }
 
     // ------------------------------------------------------------ ui helpers
-
-    /** pct < 0 shows a moving "working" bar. Safe to call from any thread. */
-    private void setStatus(String text, int pct) {
-        main.post(() -> {
-            status.setText(text);
-            if (pct < 0) {
-                progress.setIndeterminate(true);
-            } else {
-                progress.setIndeterminate(false);
-                progress.setProgressCompat(pct, true);
-            }
-        });
-    }
 
     private void showError(String message) {
         main.post(() -> {
