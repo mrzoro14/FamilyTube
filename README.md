@@ -7,9 +7,11 @@ A simple app for family and friends to save **YouTube** videos and music and **I
 **[⬇ Get the latest version](https://github.com/mrzoro14/FamilyTube/releases/latest)**
 
 - **Android phones:** download `FamilyTube.apk`, open it, and tap Install.
-- **Windows PCs:** download `FamilyTube.exe` and double-click it.
+- **Windows laptops:** download `FamilyTube-Portable-Windows.exe` and double-click it. It opens in your browser and runs only on that laptop, with nothing to install.
 
 The instructions for each are in the release notes. You only install it once: the app tells you when a new version is ready.
+
+The laptop version has everything except WhatsApp Status saver, which only works on phones.
 
 ## How to use it (Android)
 
@@ -36,11 +38,13 @@ Please only download videos you're allowed to keep.
 ## For the developer
 
 - `app/`: Android app (Java). Built on [youtubedl-android](https://github.com/yausername/youtubedl-android), which bundles [yt-dlp](https://github.com/yt-dlp/yt-dlp), Python and ffmpeg. yt-dlp updates itself on the phone once a day.
-- `windows/`: Windows app (Python + Tkinter). It downloads yt-dlp, ffmpeg and Deno on first run. Build it with `pyinstaller --onefile --windowed --name FamilyTube familytube.py`.
+- `windows/`: FamilyTube Portable Windows (Python, with the page in `windows/web/`). A private website on 127.0.0.1 that downloads yt-dlp, ffmpeg and Deno on first run. Build it with `windows/build_portable.ps1`.
 
 Build the APK with `gradlew assembleRelease` (JDK 17+). Releases are signed with one key, so each new APK installs over the old one.
 
 **Releasing an update:** bump `versionCode` and `versionName` in `app/build.gradle.kts`, build, then create a GitHub release tagged `v<versionName>` (for example `v1.4`) and attach `FamilyTube.apk`. Installed apps see the new tag and offer the update.
+
+**Releasing a laptop-only update:** bump `VERSION` in `windows/familytube_portable.py`, run `windows/build_portable.ps1`, then attach the exe and `portable.json` to the latest release with `gh release upload <tag> ... --clobber`. Laptops read `portable.json`, and phones aren't prompted because there's no new tag.
 
 ## License
 

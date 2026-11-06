@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FamilyTube Portable Windows</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f7; --card: #ffffff; --raised: #eeecf0; --line: #d9d6dd;
+  --text: #1c1b1f; --muted: #5f5c66; --brand: #d32f2f; --brand-text: #ffffff;
+  --brand-soft: #fbe4e4; --ok: #1b7f4b; --bad: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131217; --card: #1e1c24; --raised: #2a2831; --line: #3b3843;
+    --text: #e8e6ec; --muted: #a9a5b3; --brand: #ef5350; --brand-text: #1c0505;
+    --brand-soft: #3a1c1f; --ok: #6fd6a0; --bad: #ffb4ab;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 96px; }
+header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 30px; line-height: 1.1; color: var(--brand); letter-spacing: -.01em; }
+.edition { color: var(--muted); font-size: 14px; font-weight: 600; }
+.update { border-color: var(--brand); margin-bottom: 20px; }
+.update .head-row { flex-wrap: wrap; margin-bottom: 0; }
+.update .hint { white-space: pre-line; overflow-wrap: anywhere; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-text); }
+.btn.primary:hover:not(:disabled) { background: var(--brand); filter: brightness(1.08); }
+a { color: var(--brand); }
+.tabs { display: flex; gap: 4px; margin-left: auto; background: var(--raised); padding: 4px; border-radius: 12px; }
+.tabs button {
+  border: 0; background: none; padding: 8px 18px; border-radius: 9px; font-weight: 600;
+  color: var(--muted); display: flex; align-items: center; gap: 8px;
+}
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--text); }
+.badge {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--brand);
+  color: var(--brand-text); font-size: 13px; line-height: 22px; text-align: center;
+}
+.grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+.card + .card { margin-top: 20px; }
+h2 { margin: 0 0 12px; font-size: 20px; line-height: 1.2; }
+.head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.head-row h2 { margin: 0; }
+.row { display: flex; gap: 10px; }
+input[type=text] {
+  width: 100%; min-width: 0; height: 48px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg);
+}
+.btn {
+  border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+  padding: 0 16px; height: 48px; font-weight: 600; white-space: nowrap;
+}
+.btn:hover:not(:disabled) { background: var(--raised); }
+.btn.link { border: 0; background: none; color: var(--brand); height: 36px; padding: 0 8px; }
+.go {
+  width: 100%; height: 58px; margin-top: 18px; border: 0; border-radius: 12px; font-size: 19px;
+  font-weight: 700; background: var(--brand); color: var(--brand-text);
+}
+.preview { display: flex; gap: 12px; align-items: center; margin-top: 12px; min-height: 24px; color: var(--muted); }
+.preview img { width: 104px; height: 58px; object-fit: cover; border-radius: 8px; flex: none; background: var(--raised); }
+.preview b { display: block; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.label { margin: 18px 0 8px; font-weight: 600; }
+.segment { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.segment button { flex: 1; border: 0; background: none; height: 46px; font-weight: 600; }
+.segment button + button { border-left: 1px solid var(--line); }
+.segment button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button {
+  border: 1px solid var(--line); background: none; border-radius: 10px; padding: 9px 16px; font-weight: 600;
+}
+.chips button[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; font-weight: 600; cursor: pointer; }
+.switch input { width: 22px; height: 22px; accent-color: var(--brand); }
+.clip { margin-top: 12px; }
+.range { position: relative; height: 34px; margin-bottom: 8px; }
+.range .track, .range .fill { position: absolute; top: 14px; height: 6px; border-radius: 3px; }
+.range .track { left: 0; right: 0; background: var(--raised); }
+.range .fill { background: var(--brand); }
+.range input {
+  position: absolute; inset: 0; width: 100%; margin: 0; background: none; pointer-events: none;
+  -webkit-appearance: none; appearance: none; accent-color: var(--brand);
+}
+.range input::-webkit-slider-thumb {
+  -webkit-appearance: none; pointer-events: auto; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--brand); border: 3px solid var(--card); cursor: pointer;
+}
+.range input::-moz-range-thumb {
+  pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--brand); border: 3px solid var(--card); cursor: pointer;
+}
+.field label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+.field { flex: 1; min-width: 0; }
+.bar { height: 6px; background: var(--raised); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.bar i { display: block; height: 100%; background: var(--brand); transition: width .3s; }
+.bar.busy i { width: 35% !important; animation: slide 1.2s infinite ease-in-out; }
+@keyframes slide { from { margin-left: -35%; } to { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .bar.busy i { animation: none; width: 100% !important; opacity: .5; }
+  .bar i { transition: none; }
+}
+.list { list-style: none; margin: 0; padding: 0; }
+.item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; padding-top: 0; }
+.item .main { flex: 1; min-width: 0; }
+.item .name { font-weight: 600; overflow-wrap: anywhere; }
+.item .sub { color: var(--muted); font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
+.item .sub.bad { color: var(--bad); }
+.tag { flex: none; width: 58px; text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
+.actions .btn { height: 38px; padding: 0 12px; font-size: 14px; }
+.empty { color: var(--muted); margin: 0; }
+.shortcuts { display: flex; gap: 10px; flex-wrap: wrap; }
+.shortcuts .btn { flex: 1; }
+footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; color: var(--muted); font-size: 14px; }
+#toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px));
+  background: var(--text); color: var(--bg); border-radius: 12px; padding: 12px 16px; display: flex;
+  gap: 12px; align-items: center; justify-content: space-between;
+}
+#toast span { overflow-wrap: anywhere; }
+#toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; }
+[hidden] { display: none !important; }
+@media (max-width: 800px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .tabs { margin-left: 0; width: 100%; }
+  .tabs button { flex: 1; justify-content: center; }
+}
+@media (max-width: 620px) {
+  .wrap { padding: 16px 16px 96px; }
+  .card { padding: 16px; }
+  .item { flex-wrap: wrap; }
+  .item .main { flex-basis: calc(100% - 70px); }
+  .actions { width: 100%; justify-content: flex-start; }
+  .preview img { width: 80px; height: 45px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>FamilyTube</h1>
+      <div class="edition">Portable Windows</div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button id="tabHome" role="tab" aria-selected="true">Home</button>
+      <button id="tabDownloads" role="tab" aria-selected="false">Downloads
+        <span class="badge" id="badge" hidden></span></button>
+    </nav>
+  </header>
+
+  <div class="card" id="setupCard" hidden>
+    <strong id="setupText"></strong>
+    <div class="bar" id="setupBar"><i></i></div>
+  </div>
+
+  <div class="card update" id="updateCard" hidden>
+    <div class="head-row">
+      <h2 id="updateTitle"></h2>
+      <div class="actions">
+        <button class="btn" id="updateLater">Later</button>
+        <button class="btn primary" id="updateNow">Update now</button>
+      </div>
+    </div>
+    <p class="hint" id="updateText"></p>
+    <div class="bar" id="updateBar" hidden><i></i></div>
+    <p class="hint" id="updateLink" hidden>You can also get it from the
+      <a id="updateSite" target="_blank" rel="noopener noreferrer">FamilyTube download page</a>.</p>
+  </div>
+
+  <main id="pageHome" class="grid" style="margin-top:0">
+    <section class="card">
+      <h2>New download</h2>
+      <div class="row">
+        <input type="text" id="url" aria-label="YouTube or Instagram link"
+               placeholder="Paste a YouTube or Instagram link" autocomplete="off" spellcheck="false">
+        <button class="btn" id="paste">Paste</button>
+      </div>
+      <div class="preview" id="preview" hidden>
+        <img id="previewImg" alt="" hidden>
+        <div id="previewText"></div>
+      </div>
+
+      <div id="choices">
+        <div class="label">What do you want?</div>
+        <div class="segment">
+          <button id="typeVideo" aria-pressed="true">Video</button>
+          <button id="typeAudio" aria-pressed="false">Music (MP3)</button>
+        </div>
+        <div class="label">Quality</div>
+        <div class="chips" id="quality"></div>
+        <p class="hint" id="qualityHint"></p>
+
+        <label class="switch" id="clipRow">
+          <span>✂ Only download a part (clip)</span>
+          <input type="checkbox" id="clipOn">
+        </label>
+        <div class="clip" id="clipBox" hidden>
+          <div class="range" id="range" hidden>
+            <div class="track"></div><div class="fill" id="fill"></div>
+            <input type="range" id="rangeFrom" aria-label="Clip start" min="0" step="1">
+            <input type="range" id="rangeTo" aria-label="Clip end" min="0" step="1">
+          </div>
+          <div class="row">
+            <div class="field"><label for="from">From</label>
+              <input type="text" id="from" inputmode="numeric" placeholder="0:00" autocomplete="off"></div>
+            <div class="field"><label for="to">To</label>
+              <input type="text" id="to" inputmode="numeric" placeholder="1:00" autocomplete="off"></div>
+          </div>
+          <p class="hint" id="clipHint">Drag the slider, or type exact times like 1:05 or 1:02:30.</p>
+        </div>
+      </div>
+
+      <button class="go" id="go" disabled>Download</button>
+    </section>
+
+    <aside>
+      <section class="card" id="activeCard" hidden>
+        <h2>Downloading now</h2>
+        <div id="activeName" style="font-weight:600;overflow-wrap:anywhere"></div>
+        <div class="hint" id="activeStatus"></div>
+        <div class="bar" id="activeBar"><i></i></div>
+      </section>
+      <section class="card">
+        <div class="head-row"><h2>Recent</h2>
+          <button class="btn link" id="seeAll">See all</button></div>
+        <ul class="list" id="recent"></ul>
+        <p class="empty" id="recentEmpty">Your downloads will show here.</p>
+      </section>
+      <section class="card">
+        <div class="shortcuts"><button class="btn" id="openFolder">Open my downloads folder</button></div>
+        <p class="hint">Files are saved in <span id="folder">Downloads\FamilyTube</span>.</p>
+      </section>
+    </aside>
+  </main>
+
+  <main id="pageDownloads" hidden>
+    <section class="card">
+      <div class="head-row"><h2>Downloads</h2>
+        <button class="btn link" id="clear" hidden>Clear finished</button></div>
+      <ul class="list" id="all"></ul>
+      <p class="empty" id="allEmpty" hidden>Nothing here yet. Your downloads will show here with their progress.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Version <span id="version"></span>. Runs only on this computer. Please only download what you're allowed to keep.</span>
+    <span>
+      <button class="btn link" id="checkUpdate">Check for updates</button>
+      <button class="btn link" id="quit">Close FamilyTube</button>
+    </span>
+  </footer>
+</div>
+<div id="toast" role="status" hidden><span id="toastText"></span><button id="toastAction"></button></div>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const VIDEO = [["360p", "Small (360p) - saves space"], ["720p", "Good (720p) - recommended"],
+               ["1080p", "HD (1080p)"], ["Best", "Best available - big files"]];
+const AUDIO = [["Normal", "Normal (128 kbps) - smaller files"], ["High", "High - best quality"]];
+const $ = id => document.getElementById(id);
+const stored = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
+const remember = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
+
+let audio = false, ready = false, instagram = false, story = false;
+let duration = 0, title = null, infoSeq = 0, infoTimer = null;
+let level = { video: +stored("videoLevel", 1), audio: +stored("audioLevel", 1) };
+let known = null;          // state of each download last poll, to notice finishes
+let closed = false;
+let restarting = false;
+let laterFor = null;       // the version the user said "Later" to
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { "X-FamilyTube-Token": TOKEN, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+  return data;
+}
+
+function parseTime(text) {
+  const t = String(text).trim();
+  if (!/^\d+(:\d{1,2}){0,2}$/.test(t)) return -1;
+  return t.split(":").reduce((total, part) => total * 60 + Number(part), 0);
+}
+function formatTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  const two = n => String(n).padStart(2, "0");
+  return h ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
+}
+
+// ---------------------------------------------------------- pages
+function showTab(downloads) {
+  $("pageHome").hidden = downloads;
+  $("pageDownloads").hidden = !downloads;
+  $("tabHome").setAttribute("aria-selected", !downloads);
+  $("tabDownloads").setAttribute("aria-selected", downloads);
+}
+$("tabHome").onclick = () => showTab(false);
+$("tabDownloads").onclick = () => showTab(true);
+$("seeAll").onclick = () => showTab(true);
+
+let toastTimer;
+function toast(text, actionText, action, keep) {
+  $("toastText").textContent = text;
+  $("toastAction").hidden = !actionText;
+  $("toastAction").textContent = actionText || "";
+  $("toastAction").onclick = () => { $("toast").hidden = true; if (action) action(); };
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  if (!keep) toastTimer = setTimeout(() => { $("toast").hidden = true; }, 7000);
+}
+
+// ---------------------------------------------------------- choices
+function showChoices() {
+  const list = audio ? AUDIO : VIDEO;
+  const key = audio ? "audio" : "video";
+  if (level[key] >= list.length) level[key] = 1;
+  $("typeVideo").setAttribute("aria-pressed", !audio);
+  $("typeAudio").setAttribute("aria-pressed", audio);
+  $("quality").replaceChildren(...list.map(([name], i) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.setAttribute("aria-pressed", i === level[key]);
+    b.onclick = () => { level[key] = i; remember(key + "Level", i); showChoices(); };
+    return b;
+  }));
+  $("qualityHint").textContent = list[level[key]][1];
+}
+$("typeVideo").onclick = () => { audio = false; showForLink(); };
+$("typeAudio").onclick = () => { audio = true; showForLink(); };
+
+/** Instagram posts come in one size, and clips are for YouTube. */
+function showForLink() {
+  showChoices();
+  const post = instagram && !audio;
+  $("quality").parentElement.querySelectorAll(":scope > .label")[1].hidden = post;
+  $("quality").hidden = post;
+  $("qualityHint").hidden = post;
+  $("clipRow").hidden = instagram;
+  $("clipBox").hidden = instagram || !$("clipOn").checked;
+  $("go").textContent = post ? "Save post" : "Download";
+}
+
+// ---------------------------------------------------------- clip
+$("clipOn").onchange = () => { showRange(); showForLink(); };
+function showRange() {
+  $("range").hidden = duration <= 0 || !$("clipOn").checked;
+  if (duration <= 0) return;
+  for (const id of ["rangeFrom", "rangeTo"]) $(id).max = duration;
+  let start = parseTime($("from").value), end = parseTime($("to").value);
+  if (start < 0 || start >= duration) start = 0;
+  if (end <= start || end > duration) end = Math.min(start + 30, duration);
+  $("rangeFrom").value = start;
+  $("rangeTo").value = end;
+  $("from").value = formatTime(start);
+  $("to").value = formatTime(end);
+  showFill();
+}
+function showFill() {
+  const a = +$("rangeFrom").value, b = +$("rangeTo").value;
+  $("fill").style.left = a / duration * 100 + "%";
+  $("fill").style.width = (b - a) / duration * 100 + "%";
+  showClipLength();
+}
+function showClipLength() {
+  const a = parseTime($("from").value), b = parseTime($("to").value);
+  $("clipHint").textContent = a >= 0 && b > a ? "Clip length: " + formatTime(b - a)
+    : "Drag the slider, or type exact times like 1:05 or 1:02:30.";
+}
+$("rangeFrom").oninput = () => {
+  $("rangeFrom").value = Math.min(+$("rangeFrom").value, +$("rangeTo").value - 1);
+  $("from").value = formatTime(+$("rangeFrom").value);
+  showFill();
+};
+$("rangeTo").oninput = () => {
+  $("rangeTo").value = Math.max(+$("rangeTo").value, +$("rangeFrom").value + 1);
+  $("to").value = formatTime(+$("rangeTo").value);
+  showFill();
+};
+for (const id of ["from", "to"]) {
+  $(id).oninput = () => {
+    const a = parseTime($("from").value), b = parseTime($("to").value);
+    if (duration > 0 && a >= 0 && b > a && b <= duration) {
+      $("rangeFrom").value = a; $("rangeTo").value = b; showFill();
+    } else showClipLength();
+  };
+}
+function clipChoice() {
+  if (instagram || !$("clipOn").checked) return null;
+  const a = parseTime($("from").value), b = parseTime($("to").value);
+  if (a < 0 || b < 0) throw new Error("Type the clip times like 1:05 (1 minute 5 seconds) or 1:02:30.");
+  if (b <= a) throw new Error("The To time must be after the From time.");
+  if (duration > 0 && b > duration) throw new Error(`This video is only ${formatTime(duration)} long.`);
+  return [a, b];
+}
+
+// ---------------------------------------------------------- link
+function clearPreview() {
+  $("preview").hidden = true;
+  $("previewImg").hidden = true;
+  title = null; duration = 0; instagram = false; story = false;
+  showRange(); showForLink(); updateGo();
+}
+function updateGo() {
+  $("go").disabled = !ready || !$("url").value.trim() || story;
+}
+function lookUp() {
+  clearTimeout(infoTimer);
+  const text = $("url").value.trim();
+  const seq = ++infoSeq;
+  if (!text) { clearPreview(); return; }
+  updateGo();
+  infoTimer = setTimeout(async () => {
+    $("preview").hidden = false;
+    $("previewImg").hidden = true;
+    $("previewText").textContent = "Getting video details...";
+    let data;
+    try { data = await api("/api/info", { url: text }); }
+    catch (e) { if (seq === infoSeq) { $("previewText").textContent = e.message; } return; }
+    if (seq !== infoSeq) return;
+    instagram = data.instagram; story = data.story;
+    const info = data.info;
+    title = info && info.title; duration = info ? info.duration : 0;
+    if (story) {
+      $("previewText").textContent = "Instagram Stories can't be saved, because they need a login. Posts, photos and Reels work.";
+    } else if (info && info.title) {
+      const name = document.createElement("b");
+      name.textContent = info.title;
+      $("previewText").replaceChildren(name, duration ? formatTime(duration) : "");
+      if (info.thumbnail) { $("previewImg").src = info.thumbnail; $("previewImg").hidden = false; }
+    } else {
+      $("previewText").textContent = "Couldn't get the details, but you can still try to download it.";
+    }
+    showRange(); showForLink(); updateGo();
+  }, 500);
+}
+$("previewImg").onerror = () => { $("previewImg").hidden = true; };
+$("url").oninput = lookUp;
+$("url").onkeydown = e => { if (e.key === "Enter" && !$("go").disabled) $("go").click(); };
+$("paste").onclick = async () => {
+  try {
+    $("url").value = (await navigator.clipboard.readText()).trim();
+    lookUp();
+  } catch {
+    $("url").focus();
+    toast("Press Ctrl+V to paste your link.");
+  }
+};
+
+$("go").onclick = async () => {
+  try {
+    const clip = clipChoice();
+    const lvl = audio ? level.audio : level.video;
+    const kind = instagram && !audio ? "Instagram post"
+      : (audio ? "Music " + AUDIO[lvl][0] : "Video " + VIDEO[lvl][0]);
+    const what = clip ? `${kind} clip ${formatTime(clip[0])} to ${formatTime(clip[1])}` : kind;
+    await api("/api/download", { url: $("url").value, audio,
+      level: instagram && !audio ? VIDEO.length - 1 : lvl, clip,
+      label: title ? `${what}: ${title}` : what });
+    $("url").value = "";
+    clearTimeout(infoTimer); infoSeq++;
+    clearPreview();
+    toast("Added. You can see it in Downloads.");
+    refresh();
+  } catch (e) { toast(e.message, "OK", null, true); }
+};
+
+// ---------------------------------------------------------- download list
+const act = (path, id, extra) => api(path, { id, ...extra }).then(refresh).catch(e => toast(e.message));
+function button(text, onclick) {
+  const b = document.createElement("button");
+  b.className = "btn"; b.textContent = text; b.onclick = onclick;
+  return b;
+}
+function ago(seconds) {
+  const s = Date.now() / 1000 - seconds;
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " hr ago";
+  return new Date(seconds * 1000).toLocaleDateString();
+}
+function setBar(bar, pct) {
+  bar.classList.toggle("busy", pct < 0);
+  bar.firstElementChild.style.width = Math.max(pct, 0) + "%";
+}
+function row(d, full) {
+  const li = document.createElement("li"); li.className = "item";
+  const tag = document.createElement("div"); tag.className = "tag";
+  tag.textContent = d.audio ? "MP3" : /\.(jpe?g|webp|heic|png)$/i.test(d.name || "") ? "PHOTO" : "VIDEO";
+  const main = document.createElement("div"); main.className = "main";
+  const name = document.createElement("div"); name.className = "name";
+  name.textContent = d.name || d.label;
+  const sub = document.createElement("div"); sub.className = "sub";
+  const actions = document.createElement("div"); actions.className = "actions";
+  main.append(name, sub);
+  if (d.state === "done") {
+    sub.textContent = ago(d.time);
+    actions.append(button("Open", () => act("/api/open", d.id)));
+    if (full) actions.append(button("Show in folder", () => act("/api/open", d.id, { folder: true })),
+                             button("Remove", () => act("/api/remove", d.id)));
+  } else if (d.state === "failed") {
+    sub.textContent = d.error; sub.classList.add("bad");
+    actions.append(button("Retry", () => act("/api/retry", d.id)));
+    if (full) actions.append(button("Remove", () => act("/api/remove", d.id)));
+  } else {
+    sub.textContent = d.status;
+    const bar = document.createElement("div"); bar.className = "bar";
+    bar.append(document.createElement("i"));
+    setBar(bar, d.pct);
+    main.append(bar);
+    actions.append(button("Cancel", () => act("/api/cancel", d.id)));
+  }
+  li.append(tag, main, actions);
+  return li;
+}
+function notice(list) {
+  const now = new Map(list.map(d => [d.id, d.state]));
+  if (known) for (const d of list) {
+    const before = known.get(d.id);
+    if (before === undefined || before === d.state) continue;
+    if (d.state === "done") toast("Done: " + d.name, "Open", () => act("/api/open", d.id));
+    if (d.state === "failed") toast("Download failed: " + d.label, "Why?", () => {
+      showTab(true);
+    }, true);
+  }
+  known = now;
+}
+function render(state) {
+  ready = state.ready;
+  $("setupCard").hidden = ready;
+  if (!ready) {
+    $("setupText").textContent = state.message;
+    $("setupBar").hidden = state.failed;
+    setBar($("setupBar"), state.pct);
+  }
+  $("folder").textContent = state.folder;
+  updateGo();
+
+  const list = state.downloads;
+  notice(list);
+  const active = list.filter(d => d.state === "queued" || d.state === "running");
+  const finished = list.filter(d => d.state === "done" || d.state === "failed");
+  $("badge").hidden = !active.length;
+  $("badge").textContent = active.length;
+
+  const current = active.find(d => d.state === "running") || active[active.length - 1];
+  $("activeCard").hidden = !current;
+  if (current) {
+    $("activeName").textContent = current.label;
+    const waiting = active.length - 1;
+    $("activeStatus").textContent = current.status + (waiting ? ` (${waiting} more waiting)` : "");
+    setBar($("activeBar"), current.pct);
+  }
+  document.title = current && current.pct > 0 ? `${current.pct}% - FamilyTube`
+    : "FamilyTube Portable Windows";
+  $("version").textContent = state.version;
+  renderUpdate(state);
+
+  $("recent").replaceChildren(...finished.slice(0, 4).map(d => row(d, false)));
+  $("recentEmpty").hidden = finished.length > 0;
+  $("all").replaceChildren(...list.map(d => row(d, true)));
+  $("allEmpty").hidden = list.length > 0;
+  $("clear").hidden = !finished.length;
+}
+function renderUpdate(state) {
+  const u = state.update;
+  restarting = u.state === "restarting";
+  const busy = u.state === "downloading" || restarting;
+  $("updateCard").hidden = !u.version || (laterFor === u.version && !busy && u.state !== "failed");
+  if (!u.version) return;
+  $("updateTitle").textContent = restarting ? "Restarting FamilyTube..."
+    : busy ? "Updating FamilyTube..." : `New version ${u.version} available`;
+  $("updateText").textContent = busy ? (restarting ? "This page will come back by itself." : `Downloading... ${u.pct}%`)
+    : u.state === "failed" ? "The update didn't finish, and your current version still works. Please try again."
+    : (u.notes || "Your downloads and settings are kept.");
+  $("updateBar").hidden = !busy;
+  setBar($("updateBar"), restarting ? -1 : u.pct);
+  $("updateNow").hidden = $("updateLater").hidden = busy;
+  $("updateNow").textContent = u.state === "failed" ? "Try again" : "Update now";
+  $("updateLink").hidden = u.state !== "failed";
+  $("updateSite").href = state.releasesPage;
+}
+$("updateNow").onclick = () => api("/api/update/install", {}).then(refresh).catch(e => toast(e.message, "OK", null, true));
+$("updateLater").onclick = () => { laterFor = $("updateTitle").textContent.match(/[\d.]+/)?.[0]; $("updateCard").hidden = true; };
+$("checkUpdate").onclick = async () => {
+  try {
+    const r = await api("/api/update/check", {});
+    laterFor = null;
+    if (!r.available) toast("You have the latest version.");
+    refresh();
+  } catch (e) { toast(e.message); }
+};
+async function refresh() {
+  if (closed) return;
+  try { render(await api("/api/state")); }
+  catch {
+    if (restarting) {  // The new version has a new key, so reload once it's up.
+      try { if ((await fetch("/api/ping")).ok) location.reload(); } catch {}
+    } else if (!closed) {
+      toast("FamilyTube isn't running. Open the app again, then refresh this page.", null, null, true);
+    }
+  }
+}
+$("clear").onclick = () => api("/api/clear", {}).then(refresh);
+$("openFolder").onclick = () => api("/api/folder", {});
+$("quit").onclick = async () => {
+  if (!confirm("Close FamilyTube? Any download in progress will stop.")) return;
+  closed = true;
+  await api("/api/quit", {}).catch(() => {});
+  document.body.replaceChildren(Object.assign(document.createElement("p"), {
+    textContent: "FamilyTube is closed. You can close this tab.", style: "padding:32px" }));
+};
+
+showForLink();
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
