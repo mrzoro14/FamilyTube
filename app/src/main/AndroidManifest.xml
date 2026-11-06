@@ -41,7 +41,8 @@
             android:exported="true"
             android:label="@string/app_name"
             android:taskAffinity=""
-            android:theme="@style/Theme.FamilyTube.Popup">
+            android:theme="@style/Theme.FamilyTube.Popup"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

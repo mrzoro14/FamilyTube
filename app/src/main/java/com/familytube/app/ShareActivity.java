@@ -18,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.yausername.youtubedl_android.mapper.VideoInfo;
 
 /**
  * Opened from YouTube's Share button. Shows a small panel over YouTube with the
@@ -26,6 +27,7 @@ import com.google.android.material.chip.ChipGroup;
 public class ShareActivity extends AppCompatActivity {
 
     private View sheet;
+    private ClipPanel clipPanel;
     private boolean started = false;
     private boolean closing = false;
 
@@ -60,6 +62,8 @@ public class ShareActivity extends AppCompatActivity {
         TextView title = findViewById(R.id.title);
         ChipGroup video = findViewById(R.id.video_choices);
         ChipGroup audio = findViewById(R.id.audio_choices);
+        clipPanel = new ClipPanel(findViewById(android.R.id.content));
+        if (Downloader.isInstagram(link)) clipPanel.hide();
 
         // Tap outside the card, or press Back, to close without downloading.
         findViewById(R.id.scrim).setOnClickListener(v -> close());
@@ -76,6 +80,12 @@ public class ShareActivity extends AppCompatActivity {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars());
             v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(),
                     basePadding + bars.bottom);
+            return insets;
+        });
+        // Keep the clip time boxes above the keyboard and the card below the status bar.
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.scrim), (v, insets) -> {
+            v.setPadding(0, insets.getInsets(WindowInsetsCompat.Type.statusBars()).top, 0,
+                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
             return insets;
         });
 
@@ -107,12 +117,13 @@ public class ShareActivity extends AppCompatActivity {
             sheet.animate().translationY(0).setDuration(220).start();
         });
 
-        // Show the video's title so it's clear what's being saved.
+        // Show the title so it's clear what's being saved; the length sets up the clip slider.
         new Thread(() -> {
-            String name = Downloader.fetchTitle(this, link);
+            VideoInfo info = Downloader.fetchInfo(this, link);
             runOnUiThread(() -> {
                 if (isFinishing()) return;
-                title.setText(name != null ? name : link);
+                title.setText(info != null && info.getTitle() != null ? info.getTitle() : link);
+                if (info != null) clipPanel.setDuration(info.getDuration());
             });
         }).start();
     }
@@ -129,12 +140,19 @@ public class ShareActivity extends AppCompatActivity {
 
     private void begin(String link, boolean audio, int level, String what, TextView title) {
         if (started) return;
+        String problem = clipPanel.problem();
+        if (problem != null) {
+            Toast.makeText(this, problem, Toast.LENGTH_LONG).show();
+            return;
+        }
         started = true;
+        Downloader.Clip clip = clipPanel.clip();
+        String kind = clip == null ? what : what + " clip " + clip.label();
         CharSequence name = title.getText();
         String label = getString(R.string.getting_details).contentEquals(name)
-                ? what : what + ": " + name;
-        DownloadService.start(this, link, audio, level, label);
-        Toast.makeText(this, "Downloading " + what.toLowerCase()
+                ? kind : kind + ": " + name;
+        DownloadService.start(this, link, audio, level, label, clip);
+        Toast.makeText(this, "Downloading " + kind.toLowerCase()
                 + ". Check the notification bar.", Toast.LENGTH_LONG).show();
         close();
     }

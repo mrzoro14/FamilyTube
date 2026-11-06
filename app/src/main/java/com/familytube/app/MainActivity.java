@@ -13,6 +13,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.RadioButton;
@@ -26,6 +28,7 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.yausername.youtubedl_android.mapper.VideoInfo;
 
 public class MainActivity extends AppCompatActivity implements DownloadService.Listener {
 
@@ -43,6 +46,8 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
     private Uri lastFile;
     private String lastMime;
     private UpdateChecker.Update pendingUpdate; // waiting for the install-permission switch
+    private ClipPanel clipPanel;
+    private String clipLink; // the link clipPanel's length belongs to
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,6 +90,23 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
             if (index >= 0) prefs.edit().putInt(qualityKey(), index).apply();
         });
         showQualityChoices();
+
+        clipPanel = new ClipPanel(root);
+        clipPanel.setOnSwitchedOn(this::lookUpClipLength);
+        url.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                lookUpClipLength();
+            }
+        });
 
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(
                 Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -278,17 +300,53 @@ public class MainActivity extends AppCompatActivity implements DownloadService.L
             requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
             return;
         }
+        if (clipPanel.isOn() && Downloader.isInstagram(link)) {
+            showError(Downloader.friendlyError("FAMILYTUBE_CLIP_YOUTUBE"));
+            return;
+        }
+        String problem = clipPanel.problem();
+        if (problem != null) {
+            showError(problem);
+            return;
+        }
         boolean audioOnly = isAudio();
         int level = Math.max(qualityIndex(), 0);
         String what = audioOnly ? "Music " + Downloader.AUDIO_SHORT[level]
                 : "Video " + Downloader.VIDEO_SHORT[level];
-        DownloadService.start(this, link, audioOnly, level, what);
+        Downloader.Clip clip = clipPanel.clip();
+        if (clip != null) what += " clip " + clip.label();
+        DownloadService.start(this, link, audioOnly, level, what, clip);
         url.setText("");
         play.setVisibility(View.GONE);
         setStatus(DownloadService.isRunning()
                 ? "Added. It will start after the current download."
                 : "Starting download... You can leave the app; see the notification bar.", -1);
     }
+
+    /** Get the pasted video's length for the clip slider, once typing has settled. */
+    private void lookUpClipLength() {
+        main.removeCallbacks(clipLookup);
+        if (clipPanel.isOn()) main.postDelayed(clipLookup, 700);
+    }
+
+    private final Runnable clipLookup = () -> {
+        String link = Downloader.findLink(url.getText().toString().trim());
+        if (link == null || Downloader.isInstagram(link)) {
+            clipLink = null;
+            clipPanel.setDuration(0);
+            return;
+        }
+        if (link.equals(clipLink)) return;
+        clipLink = link;
+        new Thread(() -> {
+            VideoInfo info = Downloader.fetchInfo(this, link);
+            main.post(() -> {
+                if (info != null && link.equals(clipLink)) {
+                    clipPanel.setDuration(info.getDuration());
+                }
+            });
+        }).start();
+    };
 
     private boolean isAudio() {
         return type.getCheckedRadioButtonId() == R.id.audio;

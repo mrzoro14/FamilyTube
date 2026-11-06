@@ -14,6 +14,7 @@ import android.webkit.MimeTypeMap;
 import com.yausername.ffmpeg.FFmpeg;
 import com.yausername.youtubedl_android.YoutubeDL;
 import com.yausername.youtubedl_android.YoutubeDLRequest;
+import com.yausername.youtubedl_android.mapper.VideoInfo;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -79,7 +80,45 @@ final class Downloader {
         }
     }
 
+    /** A part of a video, in whole seconds. */
+    static final class Clip {
+        final int start;
+        final int end;
+
+        Clip(int start, int end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        String label() {
+            return formatTime(start) + " to " + formatTime(end);
+        }
+    }
+
     private Downloader() {
+    }
+
+    /** "90", "1:30" or "1:02:03" to seconds, or -1 if it isn't a time. */
+    static int parseTime(String text) {
+        if (text == null) return -1;
+        String t = text.trim();
+        if (!t.matches("\\d+(:\\d{1,2}){0,2}")) return -1;
+        try {
+            int total = 0;
+            for (String part : t.split(":")) total = Math.multiplyExact(total, 60)
+                    + Integer.parseInt(part);
+            return total;
+        } catch (ArithmeticException | NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    static String formatTime(int seconds) {
+        int h = seconds / 3600;
+        int m = (seconds % 3600) / 60;
+        int s = seconds % 60;
+        return h > 0 ? String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+                : String.format(Locale.US, "%d:%02d", m, s);
     }
 
     static boolean isReady() {
@@ -113,15 +152,15 @@ final class Downloader {
         ready = true;
     }
 
-    /** Video title for the share popup, or null if it can't be fetched. */
-    static String fetchTitle(Context context, String link) {
+    /** Title and length for the clip controls and popup, or null if they can't be fetched. */
+    static VideoInfo fetchInfo(Context context, String link) {
         try {
             init(context, (s, p) -> { });
             YoutubeDLRequest req = new YoutubeDLRequest(link);
             req.addOption("--ignore-no-formats-error"); // Instagram photos have no video
             req.addOption("--flat-playlist");           // one line for multi-item posts
             req.addOption("--no-warnings");
-            return YoutubeDL.getInstance().getInfo(req).getTitle();
+            return YoutubeDL.getInstance().getInfo(req);
         } catch (Exception e) {
             return null;
         }
@@ -136,17 +175,20 @@ final class Downloader {
     }
 
     /** Download one link and save it to Download/FamilyTube. Runs on the caller's thread. */
-    static Result download(Context context, String link, boolean audioOnly, int level,
+    static Result download(Context context, String link, boolean audioOnly, int level, Clip clip,
                            Progress progress) throws Exception {
         init(context, progress);
         if (isInstagramStory(link)) {
             throw new IOException("FAMILYTUBE_STORY");
         }
+        if (clip != null && isInstagram(link)) {
+            throw new IOException("FAMILYTUBE_CLIP_YOUTUBE");
+        }
         // Instagram posts can be photos, videos or a mix; save whatever is in them.
         if (isInstagram(link) && !audioOnly) {
             return downloadInstagramPost(context, link, level, progress);
         }
-        return downloadWithYtDlp(context, link, audioOnly, level, progress, 0);
+        return downloadWithYtDlp(context, link, audioOnly, level, progress, 0, clip);
     }
 
     /**
@@ -185,7 +227,7 @@ final class Downloader {
             Result r;
             if (formats != null && formats.length() > 0) {
                 Progress p = (s, pct) -> progress.update(s + step, pct);
-                r = downloadWithYtDlp(context, link, false, level, p, isPost ? i + 1 : 0);
+                r = downloadWithYtDlp(context, link, false, level, p, isPost ? i + 1 : 0, null);
             } else {
                 String url = bestImageUrl(item);
                 if (url == null) continue;
@@ -237,9 +279,12 @@ final class Downloader {
         }
     }
 
-    /** One yt-dlp download. item > 0 picks that item from a multi-item post. */
+    /**
+     * One yt-dlp download. item > 0 picks that item from a multi-item post;
+     * clip, if set, saves only that part of the video.
+     */
     private static Result downloadWithYtDlp(Context context, String link, boolean audioOnly,
-                                            int level, Progress progress, int item)
+                                            int level, Progress progress, int item, Clip clip)
             throws Exception {
         Context app = context.getApplicationContext();
         File work = new File(app.getCacheDir(), "download");
@@ -256,7 +301,14 @@ final class Downloader {
             req.addOption("--windows-filenames");
             req.addOption("--cache-dir", new File(app.getCacheDir(), "yt-dlp").getAbsolutePath());
             req.addOption("--embed-metadata");
-            req.addOption("-o", work.getAbsolutePath() + "/%(title).120B.%(ext)s");
+            String suffix = "";
+            if (clip != null) {
+                // Copies the part without re-encoding. --force-keyframes-at-cuts would be
+                // frame-exact, but re-encoding took phones many minutes at full CPU.
+                req.addOption("--download-sections", "*" + clip.start + "-" + clip.end);
+                suffix = " (clip " + clip.label().replace(':', '.') + ")";
+            }
+            req.addOption("-o", work.getAbsolutePath() + "/%(title).100B" + suffix + ".%(ext)s");
             if (audioOnly) {
                 req.addOption("-f", "bestaudio/best");
                 req.addOption("-x");
@@ -274,13 +326,18 @@ final class Downloader {
                 req.addOption("--merge-output-format", "mp4");
             }
 
-            progress.update("Starting download...", 0);
+            // Clips are cut by ffmpeg, which gives no percentage, so show a moving bar.
+            if (clip != null) {
+                progress.update("Getting your clip...", -1);
+            } else {
+                progress.update("Starting download...", 0);
+            }
             YoutubeDL.getInstance().execute(req, null, (pct, eta, line) -> {
                 if (line != null && (line.startsWith("[Merger]")
                         || line.startsWith("[ExtractAudio]")
                         || line.startsWith("[EmbedThumbnail]"))) {
                     progress.update("Almost done, finishing the file...", 100);
-                } else if (pct != null && pct >= 0) {
+                } else if (clip == null && pct != null && pct >= 0) {
                     progress.update(String.format(Locale.US, "Downloading... %.0f%%", pct),
                             Math.round(pct));
                 }
@@ -384,6 +441,9 @@ final class Downloader {
             return "Instagram Stories can't be saved. Instagram only shows them to people "
                     + "who are logged in, and FamilyTube doesn't log in to keep your account "
                     + "safe. Posts, photos and Reels work.";
+        }
+        if (m.contains("familytube_clip_youtube")) {
+            return "Clips work with YouTube links. For Instagram, turn the clip switch off.";
         }
         if (m.contains("familytube_nothing")) {
             return "Couldn't find any photo or video in this Instagram post.";

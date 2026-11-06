@@ -132,6 +132,8 @@
                 android:textSize="18sp" />
         </RadioGroup>
 
+        <include layout="@layout/clip_panel" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/download"
             android:layout_width="match_parent"

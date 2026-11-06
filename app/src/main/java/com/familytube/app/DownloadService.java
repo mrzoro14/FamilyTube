@@ -32,6 +32,8 @@ public class DownloadService extends Service {
     private static final String EXTRA_AUDIO = "audio";
     private static final String EXTRA_LEVEL = "level";
     private static final String EXTRA_LABEL = "label";
+    private static final String EXTRA_CLIP_START = "clipStart";
+    private static final String EXTRA_CLIP_END = "clipEnd";
 
     private static final String CHANNEL_PROGRESS = "progress";
     private static final String CHANNEL_DONE = "done";
@@ -54,12 +56,16 @@ public class DownloadService extends Service {
     private NotificationManager notifications;
     private long lastNotify;
 
-    static void start(Context context, String link, boolean audio, int level, String label) {
+    static void start(Context context, String link, boolean audio, int level, String label,
+                      Downloader.Clip clip) {
         Intent i = new Intent(context, DownloadService.class)
                 .putExtra(EXTRA_LINK, link)
                 .putExtra(EXTRA_AUDIO, audio)
                 .putExtra(EXTRA_LEVEL, level)
                 .putExtra(EXTRA_LABEL, label);
+        if (clip != null) {
+            i.putExtra(EXTRA_CLIP_START, clip.start).putExtra(EXTRA_CLIP_END, clip.end);
+        }
         if (Build.VERSION.SDK_INT >= 26) {
             context.startForegroundService(i);
         } else {
@@ -101,14 +107,19 @@ public class DownloadService extends Service {
         boolean audio = intent.getBooleanExtra(EXTRA_AUDIO, false);
         int level = intent.getIntExtra(EXTRA_LEVEL, 1);
         String label = intent.getStringExtra(EXTRA_LABEL);
+        Downloader.Clip clip = intent.hasExtra(EXTRA_CLIP_START)
+                ? new Downloader.Clip(intent.getIntExtra(EXTRA_CLIP_START, 0),
+                        intent.getIntExtra(EXTRA_CLIP_END, 0))
+                : null;
 
         queued.incrementAndGet();
         running = true;
-        worker.execute(() -> runOne(link, audio, level, label));
+        worker.execute(() -> runOne(link, audio, level, label, clip));
         return START_NOT_STICKY;
     }
 
-    private void runOne(String link, boolean audio, int level, String label) {
+    private void runOne(String link, boolean audio, int level, String label,
+                        Downloader.Clip clip) {
         String title = label == null ? "FamilyTube" : label;
         Downloader.Progress progress = (status, pct) -> {
             Listener l = listener;
@@ -123,7 +134,7 @@ public class DownloadService extends Service {
         Downloader.Result result = null;
         String error = null;
         try {
-            result = Downloader.download(this, link, audio, level, progress);
+            result = Downloader.download(this, link, audio, level, clip, progress);
             notifications.notify(NEXT_ID.getAndIncrement(), doneNotification(result));
         } catch (Exception e) {
             error = Downloader.friendlyError(e.getMessage());
